@@ -63,6 +63,7 @@ def index():
                     if employee_id == user.get('employee_id'):
                         session['user'] = user['email']
                         session['type'] = 'employee'
+                        session['employee_id'] = user['employee_id']
                         return redirect('/dashboard')
                     else:
                         error = 'Invalid employee ID'
