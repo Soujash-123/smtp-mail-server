@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Dashboard</title>
+    <style>
+        /* Your existing styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to right, #5B86E5, #36D1DC);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            position: relative;
+        }
+        .container {
+            display: flex;
+            width: 90%;
+            max-width: 1400px;
+            color: #fff;
+            gap: 20px;
+        }
+        .sidebar, .mail-list, .mail-display {
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            height: 80vh;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .sidebar {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #333;
+            width: 20%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-align: left;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo img {
+            width: 100px;
+        }
+        .compose-button, .attachment-button, .send-button, .logout-button {
+            background-color: white;
+            color: #007bff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin: 10px 0;
+            width: 100%;
+        }
+        .compose-button:hover, .attachment-button:hover, .send-button:hover, .logout-button:hover {
+            background-color: #007bff;
+            color: white;
+        }
+        .mail-list {
+            background-color: rgba(44, 44, 44, 0.8);
+            width: 30%;
+        }
+        .mail-display {
+            background-color: rgba(44, 44, 44, 0.8);
+            width: 50%;
+        }
+        .mail-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            border-radius: 4px;
+        }
+        .mail-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .mail-item.selected {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .mail-item.unread {
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .mail-item .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #007bff;
+            border-radius: 50%;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .mail-content {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+        .mail-subject {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .mail-sender {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .mail-timestamp {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-left: auto;
+            padding-left: 10px;
+        }
+        .mail-compose-container {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            max-width: 800px;
+            background-color: white;
+            color: #333;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+        .compose-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .compose-header .button-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+        .compose-section {
+            margin-bottom: 15px;
+        }
+        .compose-section input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .compose-body textarea {
+            width: 100%;
+            height: 200px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div>
+                <div class="logo">
+                    <img src="/api/placeholder/100/100" alt="Logo">
+                </div>
+                <button class="compose-button" onclick="toggleComposeContainer()">Compose Mail</button>
+                <h2 id="inbox-title">Inbox (0)</h2>
+            </div>
+            <div class="profile">
+                <h3>Profile</h3>
+                <p><strong>Email:</strong> {{ session.user }}</p>
+                {% if session.type == 'employee' %}
+                <p><strong>Employee ID:</strong> {{ session.employee_id }}</p>
+                {% endif %}
+                <button class="logout-button" onclick="window.location.href='/logout'">Logout</button>
+            </div>
+        </div>
+
+        <div class="mail-list">
+            <h2>Mail List</h2>
+            <div id="mailList">
+                <!-- Emails will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <div class="mail-display">
+            <h2>Mail Details</h2>
+            <div id="mailDetails">
+                <p><strong>Sender:</strong> <span id="sender">Select a message to read</span></p>
+                <p><strong>Subject:</strong> <span id="subject"></span></p>
+                <p><strong>Content:</strong> <span id="content"></span></p>
+                <p><strong>Attachments:</strong> <span id="attachments"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay"></div>
+
+    <div id="mailComposeContainer" class="mail-compose-container">
+        <div class="compose-header">
+            <h2>Compose Mail</h2>
+            <button class="compose-button" onclick="toggleComposeContainer()">Close</button>
+        </div>
+        <div class="compose-section">
+            <input type="text" placeholder="To:" id="compose-to" oninput="validateEmailInput(this)">
+            <div id="email-error" class="error-message"></div>
+        </div>
+        <div class="compose-section">
+            <input type="text" placeholder="Subject:" id="compose-subject">
+        </div>
+        <div class="compose-body">
+            <textarea placeholder="Write your message here..." id="compose-content"></textarea>
+        </div>
+        
+        <!-- Attachment Input -->
+        <div class="compose-section">
+            <label for="compose-attachment">Add Attachment:</label>
+            <input type="file" id="compose-attachment" multiple>
+        </div>
+
+        <div class="compose-footer">
+            <button class="send-button" onclick="sendEmail()">Send Mail</button>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            fetchEmails();
+            setInterval(fetchEmails, 5000);  // Refresh emails every 5 seconds
+        };
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+
+        function fetchEmails() {
+            fetch('/fetch_emails')
+                .then(response => response.json())
+                .then(emails => {
+                    const mailList = document.getElementById('mailList');
+                    mailList.innerHTML = '';
+                    
+                    emails.forEach(email => {
+                        const mailItem = document.createElement('div');
+                        mailItem.className = 'mail-item ' + (email.read ? '' : 'unread');
+                        mailItem.onclick = () => loadMailDetails(email);
+                        
+                        const mailContent = document.createElement('div');
+                        mailContent.className = 'mail-content';
+                        
+                        const subject = document.createElement('div');
+                        subject.className = 'mail-subject';
+                        subject.innerText = email.subject || '(No Subject)';
+                        
+                        const sender = document.createElement('div');
+                        sender.className = 'mail-sender';
+                        sender.innerText = email.sender || 'Unknown Sender';
+                        
+                        const timestamp = document.createElement('div');
+                        timestamp.className = 'mail-timestamp';
+                        timestamp.innerText = formatTimestamp(email.timestamp);
+                        
+                        mailContent.appendChild(subject);
+                        mailContent.appendChild(sender);
+                        mailItem.appendChild(mailContent);
+                        mailItem.appendChild(timestamp);
+                        mailList.appendChild(mailItem);
+                    });
+                    
+                    document.getElementById('inbox-title').innerText = `Inbox (${emails.length})`;
+                });
+        }
+
+        function loadMailDetails(email) {
+            document.getElementById('sender').innerText = email.sender;
+            document.getElementById('subject').innerText = email.subject;
+            document.getElementById('content').innerText = email.content;
+            const attachmentsElement = document.getElementById('attachments');
+            attachmentsElement.innerHTML = '';
+            if (email.attachments && email.attachments.length > 0) {
+                email.attachments.forEach(attachment => {
+                    const link = document.createElement('a');
+                    link.href = `/download/${attachment.id}`;
+                    link.innerText = attachment.filename;
+                    link.download = attachment.filename;
+                    attachmentsElement.appendChild(link);
+                });
+            } else {
+                attachmentsElement.innerText = 'No attachments';
+            }
+        }
+
+        function toggleComposeContainer() {
+            const overlay = document.getElementById('overlay');
+            const composeContainer = document.getElementById('mailComposeContainer');
+            overlay.style.display = overlay.style.display === 'none' ? 'block' : 'none';
+            composeContainer.style.display = composeContainer.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function sendEmail() {
+            const to = document.getElementById('compose-to').value;
+            const subject = document.getElementById('compose-subject').value;
+            const content = document.getElementById('compose-content').value;
+            const attachmentFiles = document.getElementById('compose-attachment').files;
+
+            if (!to) {
+                alert('Please enter a recipient.');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('to', to);
+            formData.append('subject', subject);
+            formData.append('content', content);
+
+            for (const file of attachmentFiles) {
+                formData.append('attachments', file);
+            }
+
+            fetch('/send_email', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Mail sent successfully!');
+                toggleComposeContainer();
+                fetchEmails();
+            })
+            .catch(error => {
+                console.error(error);
+                alert('Failed to send mail.');
+            });
+        }
+
+        function validateEmailInput(input) {
+            const emailError = document.getElementById('email-error');
+            const emails = input.value.split(',').map(email => email.trim());
+            const invalidEmails = emails.filter(email => !/^\S+@\S+\.\S+$/.test(email));
+            if (invalidEmails.length > 0) {
+                emailError.innerText = 'Invalid email(s): ' + invalidEmails.join(', ');
+                emailError.style.display = 'block';
+            } else {
+                emailError.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

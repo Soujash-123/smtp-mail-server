@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SMTP-Mail Prototype</title>
+    <style>
+        /* Embedded CSS Styles */
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background: linear-gradient(to right, #5B86E5, #36D1DC);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+        }
+
+        .container {
+          background-color: rgba(44, 44, 44, 0.8);
+          padding: 40px;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+          max-width: 450px;
+          width: 100%;
+          color: #fff;
+        }
+
+        h1 {
+          text-align: center;
+          margin-bottom: 30px;
+        }
+
+        .tab-buttons {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 30px;
+        }
+
+        .tab-buttons button {
+          background-color: rgba(255, 255, 255, 0.2);
+          border: none;
+          outline: none;
+          cursor: pointer;
+          padding: 10px 20px;
+          transition: background-color 0.3s ease, color 0.3s ease;
+          font-size: 16px;
+          margin: 0 10px;
+          border-radius: 4px 4px 0 0;
+          color: #fff;
+        }
+
+        .tab-buttons button.active {
+          background-color: rgba(255, 255, 255, 0.8);
+          color: #2c2c2c;
+          font-weight: bold;
+        }
+
+        .tab {
+          display: none;
+        }
+
+        .tab.active {
+          display: block;
+        }
+
+        input[type=text], input[type=email], input[type=password], select {
+          width: 100%;
+          padding: 12px 20px;
+          margin: 8px 0;
+          display: inline-block;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 4px;
+          box-sizing: border-box;
+          background-color: rgba(255, 255, 255, 0.2);
+          color: #fff;
+        }
+
+        button {
+          background-color: #5B86E5;
+          color: white;
+          padding: 14px 20px;
+          margin: 8px 0;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          width: 100%;
+          font-size: 16px;
+          transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+          background-color: #36D1DC;
+        }
+
+        .error {
+          color: #ff0000;
+          text-align: center;
+        }
+
+        #employee-id-input {
+          display: none;
+        }
+
+        #employee-id-input input {
+          width: 100%;
+          padding: 12px 20px;
+          margin: 8px 0;
+          display: inline-block;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 4px;
+          box-sizing: border-box;
+          background-color: rgba(255, 255, 255, 0.2);
+          color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SMTP-Mail Prototype</h1>
+
+        <div class="tab-buttons">
+            <button class="tab-btn active">Login</button>
+            <button class="tab-btn">Signup</button>
+        </div>
+
+        <div class="tab active" id="login">
+            <h2>Login</h2>
+            <form method="post" action="">
+                <input type="hidden" name="action" value="login">
+                Username: <input type="text" name="username" id="username"><br>
+                Password: <input type="password" name="password"><br>
+                <div id="employee-id-input">
+                    Employee ID:
+                    <input type="text" name="employee-id">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+
+        <div class="tab" id="signup">
+            <h2>Signup</h2>
+            <form method="post" action="">
+                <input type="hidden" name="action" value="signup">
+                Username: <input type="text" name="username"><br>
+                Type: <select name="type">
+                    <option value="user">User</option>
+                    <option value="employee">Employee</option>
+                </select><br>
+                Mail Name: <input type="text" name="mail_name" placeholder="Enter mail name"> <label id="mail-label">@syntalix.user</label><br>
+                Password: <input type="password" name="password"><br>
+                <button type="submit">Signup</button>
+            </form>
+        </div>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // Toggle tab buttons and content
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabs = document.querySelectorAll('.tab');
+
+        tabButtons.forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all buttons and tabs
+                tabButtons.forEach(b => b.classList.remove('active'));
+                tabs.forEach(t => t.classList.remove('active'));
+
+                // Add active class to clicked button and corresponding tab
+                btn.classList.add('active');
+                tabs[index].classList.add('active');
+            });
+        });
+
+        // Update mail label based on type selection
+        const typeSelect = document.querySelector('select[name="type"]');
+        const mailLabel = document.getElementById('mail-label');
+
+        typeSelect.addEventListener('change', () => {
+            const type = typeSelect.value;
+            mailLabel.textContent = `@syntalix.${type}`;
+        });
+
+        // Show/hide employee ID input based on username
+        const usernameInput = document.getElementById('username');
+        const employeeIdInput = document.getElementById('employee-id-input');
+
+        usernameInput.addEventListener('input', () => {
+            if (usernameInput.value.includes('@syntalix.employee')) {
+                employeeIdInput.style.display = 'block';
+            } else {
+                employeeIdInput.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
