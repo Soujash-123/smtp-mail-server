@@ -391,6 +391,23 @@ def fetch_emails_handler():
 
     except Exception as e:
         return jsonify({'message': f"Failed to fetch emails: {str(e)}"}), 500
+    @app.route('/api/login/direct', methods=['GET'])
+def login():
+    # Extract email and password from the URL query parameters
+    email = request.args.get('email')
+    password = request.args.get('password')
+    
+    if not email or not password:
+        return jsonify({"message": "Email and password are required"}), 400
+
+    user = users.find_one({'email': email, 'password': password})
+
+    if user:
+        session_id = str(user['_id'])  # Use the user's MongoDB ObjectId as the session ID
+        return jsonify({"message": "Login successful", "session_id": session_id})
+    else:
+        return jsonify({"message": "Invalid email or password"}), 401
+
 
 
 if __name__ == '__main__':
