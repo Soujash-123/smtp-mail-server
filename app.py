@@ -218,6 +218,134 @@ def mark_as_read():
             return jsonify({'success': False, 'message': 'Server error'}), 500
 
     return jsonify({'success': False, 'message': 'Not logged in'}), 401
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()  # Expecting JSON payload with 'email' and 'password'
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({'success': False, 'message': 'Email and password required'}), 400
+
+    user = users.find_one({'email': email, 'password': password, 'type': 'user'})  # Check for type 'user' only
+    
+    if user:
+        session['user'] = user['email']
+        session['type'] = user['type']
+        return jsonify({'success': True, 'message': 'Login successful'})
+    
+    return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
+    data = request.get_json()  # Expecting JSON payload with 'username', 'email', 'password', 'type'
+    
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    user_type = data.get('type')
+    
+    if not username or not email or not password or not user_type:
+        return jsonify({'success': False, 'message': 'All fields (username, email, password, type) are required'}), 400
+    
+    if '@syntalix.employee' in email and user_type != 'employee':
+        return jsonify({'success': False, 'message': 'Invalid email domain for non-employee type'}), 400
+
+    if users.find_one({'email': email}):
+        return jsonify({'success': False, 'message': 'Email already registered'}), 400
+
+    # If user is of type 'employee', generate an employee ID
+    if user_type == 'employee':
+        employee_id = f'SYN{users.count_documents({})+1:05}LX'  # Generate a unique employee ID
+        users.insert_one({
+            'username': username,
+            'email': email,
+            'password': password,
+            'type': user_type,
+            'employee_id': employee_id
+        })
+    else:
+        users.insert_one({
+            'username': username,
+            'email': email,
+            'password': password,
+            'type': user_type
+        })
+    
+    return jsonify({'success': True, 'message': 'Signup successful'})
+@app.route('/api/send_email', methods=['POST'])
+def api_send_email():
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+    data = request.get_json()  # Expecting JSON payload with 'to', 'subject', 'content', and optional 'attachments'
+    
+    to = data.get('to')
+    subject = data.get('subject')
+    content = data.get('content')
+    
+    if not to or not subject or not content:
+        return jsonify({'success': False, 'message': 'To, subject, and content are required'}), 400
+
+    attachments = data.get('attachments', [])  # Optional attachments
+
+    # Generate a random AES key for this email
+    key = os.urandom(32)  # AES-256 key
+
+    # Encrypt the email content and subject
+    encrypted_content = encrypt_message(content, key)
+    encrypted_subject = encrypt_message(subject, key)
+
+    email = {
+        'sender': session['user'],
+        'receiver': to,
+        'subject': encrypted_subject,
+        'content': encrypted_content,
+        'attachments': attachments,
+        'timestamp': datetime.datetime.now(),
+        'read': False,
+        'key': base64.b64encode(key).decode('utf-8')  # Store the key securely (you may want to encrypt this key)
+    }
+
+    # Insert the email into MongoDB
+    emails.insert_one(email)
+    return jsonify({'success': True, 'message': 'Email sent successfully'})
+@app.route('/api/fetch_emails', methods=['GET'])
+def api_fetch_emails():
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+    user_email = session['user']
+    email_list = list(emails.find({'receiver': user_email, 'read': False}).sort('timestamp', -1))  # Fetch unread emails
+
+    processed_emails = []
+    for email in email_list:
+        try:
+            # Decrypt subject and content using the stored key
+            key = base64.b64decode(email['key'].encode('utf-8'))
+            decrypted_subject = decrypt_message(email['subject'], key)
+            decrypted_content = decrypt_message(email['content'], key)
+
+            # Update the email as read in the database
+            emails.update_one(
+                {'_id': email['_id']},
+                {'$set': {'read': True}}
+            )
+
+            processed_emails.append({
+                'email_id': str(email['_id']),
+                'sender': email['sender'],
+                'receiver': email['receiver'],
+                'subject': decrypted_subject,
+                'content': decrypted_content,
+                'attachments': email.get('attachments', []),
+                'timestamp': email['timestamp'],
+                'read': True,  # Set to True since we just marked it as read
+            })
+        except Exception as e:
+            print(f"Error decrypting email {email['_id']}: {e}")
+
+    return jsonify({'success': True, 'emails': processed_emails})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
