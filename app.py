@@ -271,39 +271,68 @@ def api_signup():
         })
     
     return jsonify({'success': True, 'message': 'Signup successful'})
+
 @app.route('/api/send_email', methods=['POST'])
-def api_send_email():
-    session_id = request.headers.get('Session-ID')
-    
-    # Check if session ID matches
-    if session_id != session.get('session_id'):
-        return jsonify({'success': False, 'message': 'Invalid session'}), 401
-    
-    data = request.json
-    to = data['to']
-    subject = data['subject']
-    content = data['content']
-    attachments = data['attachments']
+def send_email_handler():
+    data = request.get_json()
 
-    # Encrypt the subject and content (your existing encryption logic)
-    key = os.urandom(32)
-    encrypted_subject = encrypt_message(subject, key)
-    encrypted_content = encrypt_message(content, key)
+    # Ensure that 'to', 'subject', 'content' are in the request data
+    if not all(key in data for key in ('to', 'subject', 'content')):
+        return jsonify({'message': 'Missing required fields'}), 400
 
-    email = {
-        'sender': session['user'],
-        'receiver': to,
-        'subject': encrypted_subject,
-        'content': encrypted_content,
-        'attachments': attachments,
-        'timestamp': datetime.datetime.now(),
-        'read': False,
-        'key': base64.b64encode(key).decode('utf-8')
-    }
+    # Check if 'user' exists in the session (i.e., the user is logged in)
+    if 'user' not in session:
+        # If not logged in, attempt to log in using the provided email and password
+        email = data.get('email')  # Assuming email is provided in the body
+        password = data.get('password')  # Assuming password is provided in the body
 
-    # Insert the email into MongoDB
-    emails.insert_one(email)
-    return jsonify({'success': True, 'message': 'Email sent successfully'}), 200
+        if not email or not password:
+            return jsonify({'message': 'Email and password are required for login'}), 400
+
+        # Try to log the user in
+        user = users.find_one({"email": email, "password": password})
+        if user:
+            session['user'] = email  # Store user in the session
+            print(f"User {email} logged in successfully!")
+        else:
+            return jsonify({'message': 'Invalid email or password'}), 401
+
+    # Now that the user is logged in, proceed with sending the email
+    try:
+        # Process the email content
+        attachments = []
+        for file in request.files.getlist('attachments'):
+            if file:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                attachments.append({'filename': filename, 'path': filepath})
+
+        # Generate a random AES key for encryption
+        key = os.urandom(32)  # AES-256 key
+
+        # Encrypt the email content and subject
+        encrypted_content = encrypt_message(data['content'], key)
+        encrypted_subject = encrypt_message(data['subject'], key)
+
+        email = {
+            'sender': session['user'],
+            'receiver': data['to'],
+            'subject': encrypted_subject,
+            'content': encrypted_content,
+            'attachments': attachments,
+            'timestamp': datetime.datetime.now(),
+            'read': False,
+            'key': base64.b64encode(key).decode('utf-8')  # Store the key securely
+        }
+
+        # Insert the email into MongoDB
+        emails.insert_one(email)
+        return jsonify({'message': 'Email sent successfully'})
+
+    except Exception as e:
+        return jsonify({'message': f"Failed to send email: {str(e)}"}), 500
+
 
 @app.route('/api/fetch_emails', methods=['GET'])
 def api_fetch_emails():
