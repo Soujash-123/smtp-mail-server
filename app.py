@@ -220,21 +220,20 @@ def mark_as_read():
     return jsonify({'success': False, 'message': 'Not logged in'}), 401
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    data = request.get_json()  # Expecting JSON payload with 'email' and 'password'
-    email = data.get('email')
-    password = data.get('password')
-    
-    if not email or not password:
-        return jsonify({'success': False, 'message': 'Email and password required'}), 400
-
-    user = users.find_one({'email': email, 'password': password, 'type': 'user'})  # Check for type 'user' only
+    data = request.json
+    email = data['email']
+    password = data['password']
+    user = users.find_one({'email': email, 'password': password})
     
     if user:
-        session['user'] = user['email']
-        session['type'] = user['type']
-        return jsonify({'success': True, 'message': 'Login successful'})
-    
-    return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
+        session_id = str(ObjectId())  # Generate a unique session ID
+        session['user'] = email
+        session['session_id'] = session_id  # Store the session ID in the server session
+        
+        return jsonify({'success': True, 'session_id': session_id}), 200
+    else:
+        return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
+
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
     data = request.get_json()  # Expecting JSON payload with 'username', 'email', 'password', 'type'
@@ -274,26 +273,22 @@ def api_signup():
     return jsonify({'success': True, 'message': 'Signup successful'})
 @app.route('/api/send_email', methods=['POST'])
 def api_send_email():
-    if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Not logged in'}), 401
-
-    data = request.get_json()  # Expecting JSON payload with 'to', 'subject', 'content', and optional 'attachments'
+    session_id = request.headers.get('Session-ID')
     
-    to = data.get('to')
-    subject = data.get('subject')
-    content = data.get('content')
+    # Check if session ID matches
+    if session_id != session.get('session_id'):
+        return jsonify({'success': False, 'message': 'Invalid session'}), 401
     
-    if not to or not subject or not content:
-        return jsonify({'success': False, 'message': 'To, subject, and content are required'}), 400
+    data = request.json
+    to = data['to']
+    subject = data['subject']
+    content = data['content']
+    attachments = data['attachments']
 
-    attachments = data.get('attachments', [])  # Optional attachments
-
-    # Generate a random AES key for this email
-    key = os.urandom(32)  # AES-256 key
-
-    # Encrypt the email content and subject
-    encrypted_content = encrypt_message(content, key)
+    # Encrypt the subject and content (your existing encryption logic)
+    key = os.urandom(32)
     encrypted_subject = encrypt_message(subject, key)
+    encrypted_content = encrypt_message(content, key)
 
     email = {
         'sender': session['user'],
@@ -303,29 +298,31 @@ def api_send_email():
         'attachments': attachments,
         'timestamp': datetime.datetime.now(),
         'read': False,
-        'key': base64.b64encode(key).decode('utf-8')  # Store the key securely (you may want to encrypt this key)
+        'key': base64.b64encode(key).decode('utf-8')
     }
 
     # Insert the email into MongoDB
     emails.insert_one(email)
-    return jsonify({'success': True, 'message': 'Email sent successfully'})
+    return jsonify({'success': True, 'message': 'Email sent successfully'}), 200
+
 @app.route('/api/fetch_emails', methods=['GET'])
 def api_fetch_emails():
-    if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Not logged in'}), 401
-
+    session_id = request.headers.get('Session-ID')
+    
+    # Check if session ID matches
+    if session_id != session.get('session_id'):
+        return jsonify({'success': False, 'message': 'Invalid session'}), 401
+    
     user_email = session['user']
-    email_list = list(emails.find({'receiver': user_email, 'read': False}).sort('timestamp', -1))  # Fetch unread emails
+    email_list = list(emails.find({'receiver': user_email}).sort('timestamp', -1))
 
     processed_emails = []
     for email in email_list:
         try:
-            # Decrypt subject and content using the stored key
             key = base64.b64decode(email['key'].encode('utf-8'))
             decrypted_subject = decrypt_message(email['subject'], key)
             decrypted_content = decrypt_message(email['content'], key)
 
-            # Update the email as read in the database
             emails.update_one(
                 {'_id': email['_id']},
                 {'$set': {'read': True}}
@@ -339,13 +336,12 @@ def api_fetch_emails():
                 'content': decrypted_content,
                 'attachments': email.get('attachments', []),
                 'timestamp': email['timestamp'],
-                'read': True,  # Set to True since we just marked it as read
+                'read': True
             })
         except Exception as e:
             print(f"Error decrypting email {email['_id']}: {e}")
 
-    return jsonify({'success': True, 'emails': processed_emails})
-
+    return jsonify(processed_emails), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
