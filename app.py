@@ -334,43 +334,64 @@ def send_email_handler():
         return jsonify({'message': f"Failed to send email: {str(e)}"}), 500
 
 
-@app.route('/api/fetch_emails', methods=['GET'])
-def api_fetch_emails():
-    session_id = request.headers.get('Session-ID')
-    
-    # Check if session ID matches
-    if session_id != session.get('session_id'):
-        return jsonify({'success': False, 'message': 'Invalid session'}), 401
-    
-    user_email = session['user']
-    email_list = list(emails.find({'receiver': user_email}).sort('timestamp', -1))
+@app.route('/api/fetch_emails', methods=['POST'])
+def fetch_emails_handler():
+    data = request.get_json()
 
-    processed_emails = []
-    for email in email_list:
-        try:
-            key = base64.b64decode(email['key'].encode('utf-8'))
-            decrypted_subject = decrypt_message(email['subject'], key)
-            decrypted_content = decrypt_message(email['content'], key)
+    # Check for email and password in the request for login purposes
+    email = data.get('email')
+    password = data.get('password')
 
-            emails.update_one(
-                {'_id': email['_id']},
-                {'$set': {'read': True}}
-            )
+    if not email or not password:
+        return jsonify({'message': 'Email and password are required for login'}), 400
 
-            processed_emails.append({
-                'email_id': str(email['_id']),
-                'sender': email['sender'],
-                'receiver': email['receiver'],
-                'subject': decrypted_subject,
-                'content': decrypted_content,
-                'attachments': email.get('attachments', []),
-                'timestamp': email['timestamp'],
-                'read': True
-            })
-        except Exception as e:
-            print(f"Error decrypting email {email['_id']}: {e}")
+    # Check if the user is already logged in
+    if 'user' not in session:
+        # Attempt to log the user in
+        user = users.find_one({"email": email, "password": password})
+        if user:
+            session['user'] = email  # Store the user in the session
+            print(f"User {email} logged in successfully!")
+        else:
+            return jsonify({'message': 'Invalid email or password'}), 401
 
-    return jsonify(processed_emails), 200
+    # Now that the user is logged in, proceed to fetch emails
+    try:
+        user_email = session['user']
+        email_list = list(emails.find({'receiver': user_email}).sort('timestamp', -1))
+
+        processed_emails = []
+        for email in email_list:
+            try:
+                # Decrypt subject and content using the stored key
+                key = base64.b64decode(email['key'].encode('utf-8'))
+                decrypted_subject = decrypt_message(email['subject'], key)
+                decrypted_content = decrypt_message(email['content'], key)
+
+                # Mark the email as read in the database
+                emails.update_one(
+                    {'_id': email['_id']},
+                    {'$set': {'read': True}}
+                )
+
+                processed_emails.append({
+                    'email_id': str(email['_id']),
+                    'sender': email['sender'],
+                    'receiver': email['receiver'],
+                    'subject': decrypted_subject,
+                    'content': decrypted_content,
+                    'attachments': email.get('attachments', []),
+                    'timestamp': email['timestamp'],
+                    'read': True,  # Mark as read since it's been accessed
+                })
+            except Exception as e:
+                print(f"Error decrypting email {email['_id']}: {e}")
+
+        return jsonify(processed_emails)
+
+    except Exception as e:
+        return jsonify({'message': f"Failed to fetch emails: {str(e)}"}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
