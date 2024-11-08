@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
 import base64
 import os
+import base64
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -56,7 +57,7 @@ def index():
             # Login logic
             email = request.form['username']
             password = request.form['password']
-            user = users.find_one({'email': email, 'password': password})
+            user = users.find_one({'email': email, 'password': base64.b64decode(password).decode()})
             if user:
                 if email.endswith('@syntalix.employee'):
                     employee_id = request.form.get('employee-id')
@@ -90,7 +91,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': password,
+                        'password': base64.b64encode(password.encode()).decode(),
                         'employee_id': employee_id
                     })
                 else:
@@ -98,7 +99,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': password
+                        'password': base64.b64encode(password.encode()).decode(),
                     })
                 session['user'] = f"{mail_name}@syntalix.{type}"
                 session['type'] = type
@@ -223,7 +224,7 @@ def api_login():
     data = request.json
     email = data['email']
     password = data['password']
-    user = users.find_one({'email': email, 'password': password})
+    user = users.find_one({'email': email, 'password': base64.b64decode(password).decode()})
     
     if user:
         session_id = str(ObjectId())  # Generate a unique session ID
@@ -258,7 +259,7 @@ def api_signup():
         users.insert_one({
             'username': username,
             'email': email,
-            'password': password,
+            'password': base64.b64encode(password.encode()).decode(),
             'type': user_type,
             'employee_id': employee_id
         })
@@ -266,7 +267,7 @@ def api_signup():
         users.insert_one({
             'username': username,
             'email': email,
-            'password': password,
+            'password': base64.b64encode(password.encode()).decode(),
             'type': user_type
         })
     
@@ -290,7 +291,7 @@ def send_email_handler():
             return jsonify({'message': 'Email and password are required for login'}), 400
 
         # Try to log the user in
-        user = users.find_one({"email": email, "password": password})
+        user = users.find_one({"email": email, "password": base64.b64decode(password).decode()})
         if user:
             session['user'] = email  # Store user in the session
             print(f"User {email} logged in successfully!")
@@ -348,7 +349,7 @@ def fetch_emails_handler():
     # Check if the user is already logged in
     if 'user' not in session:
         # Attempt to log the user in
-        user = users.find_one({"email": email, "password": password})
+        user = users.find_one({"email": email, "password": base64.b64decode(password).decode()})
         if user:
             session['user'] = email  # Store the user in the session
             print(f"User {email} logged in successfully!")
@@ -401,7 +402,7 @@ def direct_login():
         return jsonify({"message": "Email and password are required"}), 400
 
     # Find user by email and password
-    user = users.find_one({'email': email, 'password': password})
+    user = users.find_one({'email': email, 'password': base64.b64decode(password).decode()})
 
     if user:
         # Use MongoDB ObjectId as the session ID
