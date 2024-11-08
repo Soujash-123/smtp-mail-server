@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
 import base64
 import os
-import base64
+import bcrypt
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -91,7 +91,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': base64.b64encode(password.encode()).decode(),
+                        'password': bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
                         'employee_id': employee_id
                     })
                 else:
@@ -99,7 +99,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': base64.b64encode(password.encode()).decode(),
+                        'password': bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
                     })
                 session['user'] = f"{mail_name}@syntalix.{type}"
                 session['type'] = type
@@ -259,7 +259,7 @@ def api_signup():
         users.insert_one({
             'username': username,
             'email': email,
-            'password': base64.b64encode(password.encode()).decode(),
+            'password': bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
             'type': user_type,
             'employee_id': employee_id
         })
@@ -267,7 +267,7 @@ def api_signup():
         users.insert_one({
             'username': username,
             'email': email,
-            'password': base64.b64encode(password.encode()).decode(),
+            'password': bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
             'type': user_type
         })
     
@@ -419,7 +419,123 @@ def direct_login():
         return jsonify({"message": "Invalid email or password"}), 401
 
 
+# [Previous imports and setup code remain the same...]
 
+# [Previous helper functions remain the same...]
+
+# [Previous routes remain the same up to /api/fetch_emails...]
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user' in session:
+        return render_template('dashboard.html')
+    return redirect('/')
+
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    if 'user' in session:
+        try:
+            data = request.form
+            attachments = []
+
+            # Process attachments
+            for file in request.files.getlist('attachments'):
+                if file:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    attachments.append({'filename': filename, 'path': filepath})
+
+            # Generate a random AES key for this email
+            key = os.urandom(32)  # AES-256 key
+
+            # Encrypt the email content and subject
+            encrypted_content = encrypt_message(data['content'], key)
+            encrypted_subject = encrypt_message(data['subject'], key)
+
+            email = {
+                'sender': session['user'],
+                'receiver': data['to'],
+                'subject': encrypted_subject,
+                'content': encrypted_content,
+                'attachments': attachments,
+                'timestamp': datetime.datetime.now(),
+                'read': False,
+                'key': base64.b64encode(key).decode('utf-8')
+            }
+
+            # Insert the email into MongoDB
+            emails.insert_one(email)
+            return jsonify({'success': True, 'message': 'Email sent successfully'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
+    return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+@app.route('/fetch_emails')
+def fetch_emails():
+    if 'user' in session:
+        user_email = session['user']
+        email_list = list(emails.find({'receiver': user_email}).sort('timestamp', -1))
+
+        processed_emails = []
+        for email in email_list:
+            try:
+                # Decrypt subject and content using the stored key
+                key = base64.b64decode(email['key'].encode('utf-8'))
+                decrypted_subject = decrypt_message(email['subject'], key)
+                decrypted_content = decrypt_message(email['content'], key)
+
+                # Update the email as read in the database
+                emails.update_one(
+                    {'_id': email['_id']},
+                    {'$set': {'read': True}}
+                )
+
+                processed_emails.append({
+                    'email_id': str(email['_id']),
+                    'sender': email['sender'],
+                    'receiver': email['receiver'],
+                    'subject': decrypted_subject,
+                    'content': decrypted_content,
+                    'attachments': email.get('attachments', []),
+                    'timestamp': email['timestamp'],
+                    'read': True
+                })
+            except Exception as e:
+                print(f"Error decrypting email {email['_id']}: {e}")
+
+        return jsonify(processed_emails)
+    return jsonify([])
+
+@app.route('/mark_as_read', methods=['POST'])
+def mark_as_read():
+    if 'user' in session:
+        try:
+            email_id = request.json.get('email_id')
+
+            if not email_id:
+                return jsonify({'success': False, 'message': 'No email_id provided'}), 400
+
+            try:
+                email_obj_id = ObjectId(email_id)
+            except Exception:
+                return jsonify({'success': False, 'message': 'Invalid email_id format'}), 400
+
+            result = emails.update_one(
+                {'_id': email_obj_id},
+                {'$set': {'read': True}}
+            )
+
+            if result.matched_count == 0:
+                return jsonify({'success': False, 'message': 'Email not found'}), 404
+
+            return jsonify({'success': True, 'message': 'Email marked as read'}), 200
+
+        except Exception as e:
+            print(f"Error in /mark_as_read: {e}")
+            return jsonify({'success': False, 'message': 'Server error'}), 500
+
+    return jsonify({'success': False, 'message': 'Not logged in'}), 401
 
 if __name__ == '__main__':
     app.run(debug=True)
