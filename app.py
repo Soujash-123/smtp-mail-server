@@ -53,12 +53,11 @@ def decrypt_message(encrypted_data, key):
 def index():
     if request.method == 'POST':
         if request.form['action'] == 'login':
-            # Login logic with password hashing
+            # Login logic
             email = request.form['username']
             password = request.form['password']
-            user = users.find_one({'email': email})
-            
-            if user and bcrypt.checkpw(password.encode('utf-8'), user['password']):
+            user = users.find_one({'email': email, 'password': password})
+            if user:
                 if email.endswith('@syntalix.employee'):
                     employee_id = request.form.get('employee-id')
                     if employee_id == user.get('employee_id'):
@@ -75,15 +74,11 @@ def index():
             else:
                 error = 'Invalid email or password'
         elif request.form['action'] == 'signup':
-            # Signup logic with password hashing
+            # Signup logic
             username = request.form['username']
             type = request.form['type']
             mail_name = request.form['mail_name']
             password = request.form['password']
-            
-            # Hash the password
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-            
             if mail_name == 'admin':
                 error = 'Mail name not allowed'
             elif users.find_one({'email': f"{mail_name}@syntalix.{type}"}):
@@ -95,7 +90,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': hashed_password,
+                        'password': password,
                         'employee_id': employee_id
                     })
                 else:
@@ -103,7 +98,7 @@ def index():
                         'username': username,
                         'type': type,
                         'email': f"{mail_name}@syntalix.{type}",
-                        'password': hashed_password
+                        'password': password
                     })
                 session['user'] = f"{mail_name}@syntalix.{type}"
                 session['type'] = type
@@ -228,16 +223,16 @@ def api_login():
     data = request.json
     email = data['email']
     password = data['password']
-    user = users.find_one({'email': email})
+    user = users.find_one({'email': email, 'password': password})
     
-    if user and bcrypt.checkpw(password.encode('utf-8'), user['password']):
-        session_id = str(ObjectId())
+    if user:
+        session_id = str(ObjectId())  # Generate a unique session ID
         session['user'] = email
-        session['session_id'] = session_id
+        session['session_id'] = session_id  # Store the session ID in the server session
+        
         return jsonify({'success': True, 'session_id': session_id}), 200
     else:
         return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
-
 
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
