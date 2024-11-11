@@ -164,13 +164,8 @@ def fetch_emails():
                 key = base64.b64decode(email['key'].encode('utf-8'))
                 decrypted_subject = decrypt_message(email['subject'], key)
                 decrypted_content = decrypt_message(email['content'], key)
-
+                print((email['read']))
                 # Update the email as read in the database
-                emails.update_one(
-                    {'_id': email['_id']},
-                    {'$set': {'read': True}}
-                )
-
                 processed_emails.append({
                     'email_id': str(email['_id']),
                     'sender': email['sender'],
@@ -179,7 +174,7 @@ def fetch_emails():
                     'content': decrypted_content,
                     'attachments': email.get('attachments', []),
                     'timestamp': email['timestamp'],
-                    'read': True,  # Set to True since we just marked it as read
+                    'read': email['read'], 
                 })
             except Exception as e:
                 # Handle decryption errors if needed
@@ -189,35 +184,22 @@ def fetch_emails():
     return jsonify([])
 
 
-@app.route('/mark_as_read', methods=['POST'])
-def mark_as_read():
-    if 'user' in session:
-        try:
-            email_id = request.json.get('email_id')
-
-            if not email_id:
-                return jsonify({'success': False, 'message': 'No email_id provided'}), 400
-
-            try:
-                email_obj_id = ObjectId(email_id)
-            except Exception:
-                return jsonify({'success': False, 'message': 'Invalid email_id format'}), 400
-
-            result = emails.update_one(
-                {'_id': email_obj_id},
-                {'$set': {'read': True}}
-            )
-
-            if result.matched_count == 0:
-                return jsonify({'success': False, 'message': 'Email not found'}), 404
-
-            return jsonify({'success': True, 'message': 'Email marked as read'}), 200
-
-        except Exception as e:
-            print(f"Error in /mark_as_read: {e}")
-            return jsonify({'success': False, 'message': 'Server error'}), 500
-
-    return jsonify({'success': False, 'message': 'Not logged in'}), 401
+@app.route('/mark_as_read/<email_id>', methods=['POST'])
+def mark_as_read(email_id):
+    try:
+        print(email_id)
+        result = emails.update_one(
+            {'_id': ObjectId(email_id)},
+            {'$set': {'read': True}}
+        )
+        if result.modified_count == 1:
+            print(f"Email {email_id} marked as read.")
+        else:
+            print(f"Email {email_id} not found or already marked as read.")
+        return '', 204
+    except Exception as e:
+        print(f"Error marking email as read: {e}")
+        return 'Failed to mark as read', 500
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.json

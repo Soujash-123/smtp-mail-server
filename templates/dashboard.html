@@ -80,9 +80,6 @@
         .mail-item:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
-        .mail-item.selected {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
         .mail-item.unread {
             font-weight: bold;
             background-color: rgba(255, 255, 255, 0.05);
@@ -185,7 +182,7 @@
                     <img src="/api/placeholder/100/100" alt="Logo">
                 </div>
                 <button class="compose-button" onclick="toggleComposeContainer()">Compose Mail</button>
-                <h2 id="inbox-title">Inbox (0)</h2>
+                <h2 id="inbox-title">Inbox (<span id="inbox-title-count">0</span>)</h2>
             </div>
             <div class="profile">
                 <h3>Profile</h3>
@@ -193,7 +190,7 @@
                 {% if session.type == 'employee' %}
                 <p><strong>Employee ID:</strong> {{ session.employee_id }}</p>
                 {% endif %}
-                <button class="logout-button" onclick="window.location.href='/logout'">Logout</button>
+                <button class="logout-button" onclick="window.location.href='/'">Logout</button>
             </div>
         </div>
 
@@ -233,7 +230,6 @@
             <textarea placeholder="Write your message here..." id="compose-content"></textarea>
         </div>
         
-        <!-- Attachment Input -->
         <div class="compose-section">
             <label for="compose-attachment">Add Attachment:</label>
             <input type="file" id="compose-attachment" multiple>
@@ -247,7 +243,7 @@
     <script>
         window.onload = function() {
             fetchEmails();
-            setInterval(fetchEmails, 5000);  // Refresh emails every 5 seconds
+            setInterval(fetchEmails, 5000);
         };
 
         function formatTimestamp(timestamp) {
@@ -266,12 +262,19 @@
                         const mailItem = document.createElement('div');
                         mailItem.className = 'mail-item ' + (email.read ? '' : 'unread');
                         mailItem.onclick = () => loadMailDetails(email);
+
+                        if (!email.read) {
+                            const dot = document.createElement('div');
+                            dot.className = 'dot';
+                            mailItem.appendChild(dot);
+                        }
                         
                         const mailContent = document.createElement('div');
                         mailContent.className = 'mail-content';
                         
                         const subject = document.createElement('div');
                         subject.className = 'mail-subject';
+                        subject.style.fontWeight = email.read ? 'normal' : 'bold';
                         subject.innerText = email.subject || '(No Subject)';
                         
                         const sender = document.createElement('div');
@@ -289,6 +292,7 @@
                         mailList.appendChild(mailItem);
                     });
                     
+                    document.getElementById('inbox-title-count').innerText = emails.length;
                     document.getElementById('inbox-title').innerText = `Inbox (${emails.length})`;
                 });
         }
@@ -299,6 +303,7 @@
             document.getElementById('content').innerText = email.content;
             const attachmentsElement = document.getElementById('attachments');
             attachmentsElement.innerHTML = '';
+            
             if (email.attachments && email.attachments.length > 0) {
                 email.attachments.forEach(attachment => {
                     const link = document.createElement('a');
@@ -310,6 +315,10 @@
             } else {
                 attachmentsElement.innerText = 'No attachments';
             }
+            
+            fetch(`/mark_as_read/${email.email_id}`, { method: 'POST' })
+                .then(response => response.ok ? console.log('Marked as read') : console.error('Failed to mark as read'))
+                .catch(error => console.error('Fetch error:', error));
         }
 
         function toggleComposeContainer() {
@@ -339,32 +348,25 @@
                 formData.append('attachments', file);
             }
 
-            fetch('/send_email', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert('Mail sent successfully!');
-                toggleComposeContainer();
-                fetchEmails();
-            })
-            .catch(error => {
-                console.error(error);
-                alert('Failed to send mail.');
-            });
+            fetch('/send_email', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Mail sent successfully!');
+                    toggleComposeContainer();
+                    fetchEmails();
+                })
+                .catch(error => {
+                    console.error(error);
+                    alert('Failed to send mail.');
+                });
         }
 
         function validateEmailInput(input) {
             const emailError = document.getElementById('email-error');
             const emails = input.value.split(',').map(email => email.trim());
             const invalidEmails = emails.filter(email => !/^\S+@\S+\.\S+$/.test(email));
-            if (invalidEmails.length > 0) {
-                emailError.innerText = 'Invalid email(s): ' + invalidEmails.join(', ');
-                emailError.style.display = 'block';
-            } else {
-                emailError.style.display = 'none';
-            }
+            emailError.style.display = invalidEmails.length > 0 ? 'block' : 'none';
+            emailError.innerText = invalidEmails.length > 0 ? 'Invalid email(s): ' + invalidEmails.join(', ') : '';
         }
     </script>
 </body>
