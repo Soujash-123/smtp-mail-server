@@ -26,7 +26,7 @@ To run the application locally, follow these steps:
 
 1. Clone the repository:
 ```
-git clone https://github.com/your-username/secure-email-app.git
+git clone https://github.com/Soujash-123/smtp-mail-server.git
 ```
 2. Install the required dependencies:
 ```
