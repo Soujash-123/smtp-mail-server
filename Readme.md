@@ -1,4 +1,4 @@
-# Secure Email Application
+# Syntalix Mail Application
 
 ## Overview
 This is a Flask-based web application that provides a secure email service with the following features:
@@ -12,7 +12,7 @@ This is a Flask-based web application that provides a secure email service with 
 ## Documentation
 For detailed documentation, please refer to the provided link:
 
-[Secure Email Application Documentation](https://drive.google.com/drive/folders/1TYcLpsSuZkmALHpjS3NgftBdz0cNix4d?usp=sharing)
+[Syntalix Mail Application Documentation](https://drive.google.com/drive/folders/1TYcLpsSuZkmALHpjS3NgftBdz0cNix4d?usp=sharing)
 
 ## Features
 - Secure user authentication with email and password
