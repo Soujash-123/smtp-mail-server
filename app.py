@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
+from werkzeug.security import generate_password_hash, check_password_hash
 import base64
 import os
 
@@ -56,8 +57,8 @@ def index():
             # Login logic
             email = request.form['username']
             password = request.form['password']
-            user = users.find_one({'email': email, 'password': password})
-            if user:
+            user = users.find_one({'email': email})
+            if user and check_password_hash(user['password'],password):
                 if email.endswith('@syntalix.employee'):
                     employee_id = request.form.get('employee-id')
                     if employee_id == user.get('employee_id'):
@@ -78,7 +79,7 @@ def index():
             username = request.form['username']
             type = request.form['type']
             mail_name = request.form['mail_name']
-            password = request.form['password']
+            password = generate_password_hash(request.form['password'])
             if mail_name == 'admin':
                 error = 'Mail name not allowed'
             elif users.find_one({'email': f"{mail_name}@syntalix.{type}"}):
@@ -207,7 +208,7 @@ def api_login():
     password = data['password']
     user = users.find_one({'email': email, 'password': password})
     
-    if user:
+    if user and check_password_hash(user['password'],password):
         session_id = str(ObjectId())  # Generate a unique session ID
         session['user'] = email
         session['session_id'] = session_id  # Store the session ID in the server session
@@ -222,7 +223,7 @@ def api_signup():
     
     username = data.get('username')
     email = data.get('email')
-    password = data.get('password')
+    password = generate_password_hash(data.get('password'))
     user_type = data.get('type')
     
     if not username or not email or not password or not user_type:
@@ -272,8 +273,8 @@ def send_email_handler():
             return jsonify({'message': 'Email and password are required for login'}), 400
 
         # Try to log the user in
-        user = users.find_one({"email": email, "password": password})
-        if user:
+        user = users.find_one({"email": email})
+        if user and check_password_hash(user["password"],password):
             session['user'] = email  # Store user in the session
             print(f"User {email} logged in successfully!")
         else:
@@ -330,8 +331,8 @@ def fetch_emails_handler():
     # Check if the user is already logged in
     if 'user' not in session:
         # Attempt to log the user in
-        user = users.find_one({"email": email, "password": password})
-        if user:
+        user = users.find_one({"email": email})
+        if user and check_password_hash(user['password'],password):
             session['user'] = email  # Store the user in the session
             print(f"User {email} logged in successfully!")
         else:
@@ -373,6 +374,8 @@ def fetch_emails_handler():
 
     except Exception as e:
         return jsonify({'message': f"Failed to fetch emails: {str(e)}"}), 500
+    
+
 @app.route('/api/login/direct', methods=['GET'])
 def direct_login():
     # Extract email and password from the URL query parameters
@@ -383,9 +386,9 @@ def direct_login():
         return jsonify({"message": "Email and password are required"}), 400
 
     # Find user by email and password
-    user = users.find_one({'email': email, 'password': password})
+    user = users.find_one({'email': email})
 
-    if user:
+    if user and check_password_hash(user['password'],password):
         # Use MongoDB ObjectId as the session ID
         session_id = str(user['_id'])
         
