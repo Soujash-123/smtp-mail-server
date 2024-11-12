@@ -184,6 +184,10 @@ def fetch_emails():
         return jsonify(processed_emails)
     return jsonify([])
 
+@app.route('/ping')
+def ping():
+    return jsonify({'status': 'ok'}), 200
+
 
 @app.route('/mark_as_read/<email_id>', methods=['POST'])
 def mark_as_read(email_id):
